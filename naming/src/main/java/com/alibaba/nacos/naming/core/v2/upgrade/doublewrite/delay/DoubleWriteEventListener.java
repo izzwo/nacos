@@ -63,12 +63,16 @@ public class DoubleWriteEventListener extends Subscriber<ServiceEvent.ServiceCha
     
     @Override
     public void onEvent(ServiceEvent.ServiceChangedEvent event) {
+        System.out.println("服务变更事件***************************************");
         if (stopDoubleWrite) {
+            // 单机模式不处理
             return;
         }
         if (!upgradeJudgement.isUseGrpcFeatures()) {
             return;
         }
+        // 集群模式处理逻辑
+        // Distro 一致性协议
         String taskKey = ServiceChangeV2Task.getKey(event.getService());
         ServiceChangeV2Task task = new ServiceChangeV2Task(event.getService(), DoubleWriteContent.INSTANCE);
         doubleWriteDelayTaskEngine.addTask(taskKey, task);

@@ -95,7 +95,10 @@ public class GrpcRequestAcceptor extends RequestGrpc.RequestImplBase {
             responseObserver.onCompleted();
             return;
         }
-        
+
+        // 根据请求类型来获得实际的RequestHandler，这里type实际为InstanceRequest，requestHandler实际为InstanceRequestHandler
+        // 通过GRPC请求的元数据中获取请求类型
+        // 通过类型从Mqp中获取对象的请求处理Handler
         RequestHandler requestHandler = requestHandlerRegistry.getByRequestType(type);
         //no handler found.
         if (requestHandler == null) {
@@ -124,6 +127,7 @@ public class GrpcRequestAcceptor extends RequestGrpc.RequestImplBase {
         
         Object parseObj = null;
         try {
+            // //将请求进行解析
             parseObj = GrpcUtils.parse(grpcRequest);
         } catch (Exception e) {
             Loggers.REMOTE_DIGEST
@@ -161,11 +165,14 @@ public class GrpcRequestAcceptor extends RequestGrpc.RequestImplBase {
         try {
             Connection connection = connectionManager.getConnection(CONTEXT_KEY_CONN_ID.get());
             RequestMeta requestMeta = new RequestMeta();
+            // 填充clientIP、connId、version等信息
             requestMeta.setClientIp(connection.getMetaInfo().getClientIp());
             requestMeta.setConnectionId(CONTEXT_KEY_CONN_ID.get());
             requestMeta.setClientVersion(connection.getMetaInfo().getVersion());
             requestMeta.setLabels(connection.getMetaInfo().getLabels());
+            // 更新连接时间
             connectionManager.refreshActiveTime(requestMeta.getConnectionId());
+            // 执行真正的处理逻辑
             Response response = requestHandler.handleRequest(request, requestMeta);
             Payload payloadResponse = GrpcUtils.convert(response);
             traceIfNecessary(payloadResponse, false);

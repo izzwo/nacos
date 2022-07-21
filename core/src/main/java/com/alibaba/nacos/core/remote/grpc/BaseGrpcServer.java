@@ -90,6 +90,7 @@ public abstract class BaseGrpcServer extends BaseRpcServer {
         final MutableHandlerRegistry handlerRegistry = new MutableHandlerRegistry();
         
         // server interceptor to set connection id.
+        // 初始化了一个服务调用的拦截器，在这个拦截器中获取到远程调用的属性(connection、id、ip、port)放入线程上下文中
         ServerInterceptor serverInterceptor = new ServerInterceptor() {
             @Override
             public <T, S> ServerCall.Listener<T> interceptCall(ServerCall<T, S> call, Metadata headers,
@@ -106,9 +107,14 @@ public abstract class BaseGrpcServer extends BaseRpcServer {
                 return Contexts.interceptCall(ctx, call, headers, next);
             }
         };
-        
+
+        // 通过长连接建立处理客户端的请求
         addServices(handlerRegistry, serverInterceptor);
-        
+
+        //设置相关的Server属性以及对连接的管理，这里的transportReady会在连接建立时根据当前的连接的属性构造一个新的Attributes，
+        // 主要是为每个连接建立一个connectionId，和前面提到的拦截器相呼应。并在连接断开时从connectionManager移除连接。
+        //设置server启动的端口（默认为 8848 + 1001 = 9849），getRpcExecutor线程执行器（线程数默认为 = 处理器核数*16）
+        //，maxInboundMessageSize最大限制为10M，压缩解压缩使用gzip。
         server = ServerBuilder.forPort(getServicePort()).executor(getRpcExecutor())
                 .maxInboundMessageSize(getInboundMessageSize()).fallbackHandlerRegistry(handlerRegistry)
                 .compressorRegistry(CompressorRegistry.getDefaultInstance())
@@ -166,31 +172,43 @@ public abstract class BaseGrpcServer extends BaseRpcServer {
     private void addServices(MutableHandlerRegistry handlerRegistry, ServerInterceptor... serverInterceptor) {
         
         // unary common call register.
+        // 构造MethodDescriptor，包括：服务调用方式简单RPC即UNARY、服务的接口名和方法名、请求序列化类、响应序列化类
         final MethodDescriptor<Payload, Payload> unaryPayloadMethod = MethodDescriptor.<Payload, Payload>newBuilder()
                 .setType(MethodDescriptor.MethodType.UNARY)
                 .setFullMethodName(MethodDescriptor.generateFullMethodName(REQUEST_SERVICE_NAME, REQUEST_METHOD_NAME))
                 .setRequestMarshaller(ProtoUtils.marshaller(Payload.getDefaultInstance()))
                 .setResponseMarshaller(ProtoUtils.marshaller(Payload.getDefaultInstance())).build();
-        
+
+        // 接受请求将调用执行(有服务注册或注销的请求这里会执行)
         final ServerCallHandler<Payload, Payload> payloadHandler = ServerCalls
-                .asyncUnaryCall((request, responseObserver) -> grpcCommonRequestAcceptor.request(request, responseObserver));
-        
+                .asyncUnaryCall((request, responseObserver) -> {
+                    //
+                    System.out.println(Thread.currentThread().getName() + "处理客户端的请求******");
+                    grpcCommonRequestAcceptor.request(request, responseObserver);
+                });
+
+        // 构建服务
         final ServerServiceDefinition serviceDefOfUnaryPayload = ServerServiceDefinition.builder(REQUEST_SERVICE_NAME)
                 .addMethod(unaryPayloadMethod, payloadHandler).build();
+        // 注册到内部注册中心，可以根据服务定义信息查询实现类（普通对象request/response调用）
         handlerRegistry.addService(ServerInterceptors.intercept(serviceDefOfUnaryPayload, serverInterceptor));
         
         // bi stream register.
+        // 服务接口处理类，接收到biRequestStream请求将调用执行
         final ServerCallHandler<Payload, Payload> biStreamHandler = ServerCalls.asyncBidiStreamingCall(
                 (responseObserver) -> grpcBiStreamRequestAcceptor.requestBiStream(responseObserver));
-        
+
+        // 构造MethodDescriptor，包括：服务双向流调用方式BIDI_STREAMING、服务的接口名和方法名、请求序列化类、响应序列化类
         final MethodDescriptor<Payload, Payload> biStreamMethod = MethodDescriptor.<Payload, Payload>newBuilder()
                 .setType(MethodDescriptor.MethodType.BIDI_STREAMING).setFullMethodName(MethodDescriptor
                         .generateFullMethodName(REQUEST_BI_STREAM_SERVICE_NAME, REQUEST_BI_STREAM_METHOD_NAME))
                 .setRequestMarshaller(ProtoUtils.marshaller(Payload.newBuilder().build()))
                 .setResponseMarshaller(ProtoUtils.marshaller(Payload.getDefaultInstance())).build();
-        
+
+        // 构建服务BiRequestStream
         final ServerServiceDefinition serviceDefOfBiStream = ServerServiceDefinition
                 .builder(REQUEST_BI_STREAM_SERVICE_NAME).addMethod(biStreamMethod, biStreamHandler).build();
+        // 注册到内部注册中心中，可以根据服务定义信息查询实现类（双向流调用）
         handlerRegistry.addService(ServerInterceptors.intercept(serviceDefOfBiStream, serverInterceptor));
         
     }

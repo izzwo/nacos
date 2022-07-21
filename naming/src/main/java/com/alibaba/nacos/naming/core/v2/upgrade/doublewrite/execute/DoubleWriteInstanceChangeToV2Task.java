@@ -51,6 +51,7 @@ public class DoubleWriteInstanceChangeToV2Task extends AbstractExecuteTask {
     @Override
     public void run() {
         try {
+            System.out.println("DoubleWriteInstanceChangeToV2Task 任务执行");
             InstanceOperatorClientImpl instanceOperator = ApplicationUtils.getBean(InstanceOperatorClientImpl.class);
             if (register) {
                 instanceOperator.registerInstance(namespace, serviceName, instance);

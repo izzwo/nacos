@@ -55,6 +55,7 @@ public abstract class RequestHandler<T extends Request, S extends Response> {
             }
             
         }
+        // 调用对应的Handle处理不同的Type请求
         return handle(request, meta);
     }
     

@@ -38,7 +38,8 @@ import java.util.concurrent.TimeUnit;
  * @author nkorange
  */
 public class NamingExample {
-    
+
+    // -Dnacos.standalone=true
     public static void main(String[] args) throws NacosException, InterruptedException {
         
         Properties properties = new Properties();

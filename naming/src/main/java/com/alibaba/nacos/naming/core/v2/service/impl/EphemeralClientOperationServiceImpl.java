@@ -49,20 +49,31 @@ public class EphemeralClientOperationServiceImpl implements ClientOperationServi
     
     @Override
     public void registerInstance(Service service, Instance instance, String clientId) {
+        // 获取服务信息
+        // Service{namespace='public', group='DEFAULT_GROUP', name='nacos.naming.serviceName', ephemeral=true, revision=0}
         Service singleton = ServiceManager.getInstance().getSingleton(service);
         if (!singleton.isEphemeral()) {
             throw new NacosRuntimeException(NacosException.INVALID_PARAM,
                     String.format("Current service %s is persistent service, can't register ephemeral instance.",
                             singleton.getGroupedServiceName()));
         }
+        // 获取客户端信息获取client实例
+        // 这个就是前面createIpPortClientIfAbsent# 放入 clientManager中的
         Client client = clientManager.getClient(clientId);
         if (!clientIsLegal(client, clientId)) {
             return;
         }
+        // 获取发布信息
+        // InstancePublishInfo{ip='20.18.7.11', port=8080, healthy=true}
         InstancePublishInfo instanceInfo = getPublishInfo(instance);
-        client.addServiceInstance(singleton, instanceInfo);
-        client.setLastUpdatedTime();
+        // 将实例信息添加到发布者列表中 ConcurrentHashMap<Service, InstancePublishInfo>
+        client.addServiceInstance(singleton, instanceInfo); // publishers
+        client.setLastUpdatedTime(); // 设置客户端更新时间
+
+        // 发布一个客户端注册事件通知订阅者
         NotifyCenter.publishEvent(new ClientOperationEvent.ClientRegisterServiceEvent(singleton, clientId));
+
+        // 发布一个实例元数据事件通知订阅者
         NotifyCenter
                 .publishEvent(new MetadataEvent.InstanceMetadataEvent(singleton, instanceInfo.getMetadataId(), false));
     }
